@@ -1,0 +1,5 @@
+{
+  "name": "Vistalli Flow Tracker",
+  "description": "Herramienta interna para documentar flujos de conversación de ventas, generar diagramas y estructurar datos para entrenamiento de bots.",
+  "requestFramePermissions": []
+}
