@@ -1,251 +1,166 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Activity, PlusCircle, LayoutDashboard, Database, Upload, Download, Cloud, CloudOff } from 'lucide-react';
-import { FlowData } from './types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Activity, PlusCircle, LayoutDashboard, Download, Upload } from 'lucide-react';
+import { FlowData, Branch } from './types';
 import { INITIAL_FLOW_STATE } from './constants';
 import { storageService } from './utils/storage';
 import { apiService } from './utils/api';
 import { SERVER_CONFIG } from './config';
 import Dashboard from './views/Dashboard';
-import VisualBuilder from './views/VisualBuilder'; // Changed from FlowForm
+import VisualBuilder from './views/VisualBuilder';
 import ResultView from './views/ResultView';
 
-// Simple mocked router using state
-type View = 'dashboard' | 'create' | 'edit' | 'result';
+type View = 'dashboard' | 'builder' | 'result';
 
 export default function App() {
   const [view, setView] = useState<View>('dashboard');
   const [flows, setFlows] = useState<FlowData[]>([]);
-  const [currentFlow, setCurrentFlow] = useState<FlowData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [currentFlowId, setCurrentFlowId] = useState<string | null>(null);
+  const [activeBranch, setActiveBranch] = useState<Branch>('Giorlent Norte');
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load data logic
   useEffect(() => {
     const loadData = async () => {
-      setIsLoading(true);
       if (SERVER_CONFIG.USE_SERVER) {
-        // Cargar desde Servidor
         const serverData = await apiService.fetchFlows();
         setFlows(serverData);
       } else {
-        // Cargar Local
         const localData = storageService.loadFlows();
         setFlows(localData);
       }
-      setIsLoading(false);
     };
     loadData();
   }, []);
 
-  // Save logic helper
-  const persistData = async (newFlows: FlowData[]) => {
-    setFlows(newFlows); // Actualizar UI inmediatamente
-    
+  const persistData = useCallback(async (newFlows: FlowData[]) => {
+    setIsSaving(true);
+    setFlows([...newFlows]); // Force new reference
     if (SERVER_CONFIG.USE_SERVER) {
-      setIsLoading(true);
       await apiService.saveAllFlows(newFlows);
-      setIsLoading(false);
     } else {
       storageService.saveFlows(newFlows);
     }
-  };
+    // Artificial delay for UX feedback
+    setTimeout(() => setIsSaving(false), 800);
+  }, []);
 
-  const handleCreateNew = () => {
-    setCurrentFlow({
-      ...INITIAL_FLOW_STATE,
-      id: crypto.randomUUID(),
-      date: new Date().toISOString().split('T')[0],
-      createdAt: Date.now(),
-      nodes: [], // New graph structure
-    } as FlowData);
-    setView('create');
-  };
+  const handleSaveFlow = useCallback(async (updatedFlow: FlowData) => {
+    setFlows(prev => {
+      const existingIndex = prev.findIndex(f => f.id === updatedFlow.id);
+      let nextFlows;
+      if (existingIndex >= 0) {
+        nextFlows = [...prev];
+        nextFlows[existingIndex] = { ...updatedFlow, createdAt: Date.now() };
+      } else {
+        nextFlows = [...prev, updatedFlow];
+      }
+      persistData(nextFlows);
+      return nextFlows;
+    });
+  }, [persistData]);
 
-  const handleSaveFlow = async (flow: FlowData) => {
-    const existingIndex = flows.findIndex(f => f.id === flow.id);
-    let updatedFlows;
-    
-    if (existingIndex >= 0) {
-      updatedFlows = [...flows];
-      updatedFlows[existingIndex] = flow;
-    } else {
-      updatedFlows = [...flows, flow];
+  const handleDelete = useCallback(async (id: string) => {
+    if (window.confirm('¿Estás seguro de eliminar este flujo?')) {
+      const updatedFlows = flows.filter(f => f.id !== id);
+      persistData(updatedFlows);
+      if (currentFlowId === id) setCurrentFlowId(null);
     }
+  }, [flows, currentFlowId, persistData]);
 
-    await persistData(updatedFlows);
-    setCurrentFlow(flow);
-    // After saving a visual flow, we might want to stay in edit or go to result. 
-    // Since ResultView generates mermaid from data, we can go there to see the static summary
-    setView('result'); 
-  };
-
-  const handleEdit = (flow: FlowData) => {
-    setCurrentFlow(flow);
-    setView('edit');
-  };
-
-  const handleDuplicate = (flow: FlowData) => {
+  const handleDuplicate = useCallback((flow: FlowData, targetBranch?: Branch) => {
     const duplicated: FlowData = {
       ...flow,
       id: crypto.randomUUID(),
+      branch: targetBranch || flow.branch,
       createdAt: Date.now(),
       date: new Date().toISOString().split('T')[0],
-      category: flow.category + ' (Copia)',
+      category: flow.category + (targetBranch ? '' : ' (Copia)'),
     };
-    setCurrentFlow(duplicated);
-    setView('create'); 
-  };
+    const nextFlows = [...flows, duplicated];
+    persistData(nextFlows);
+    return duplicated;
+  }, [flows, persistData]);
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('¿Estás seguro de eliminar este flujo?')) {
-      const updatedFlows = flows.filter(f => f.id !== id);
-      await persistData(updatedFlows);
-      
-      if (currentFlow?.id === id) {
-        setView('dashboard');
-        setCurrentFlow(null);
-      }
-    }
-  };
-
-  const handleViewResult = (flow: FlowData) => {
-      setCurrentFlow(flow);
-      setView('result');
-  }
-
-  // Database / Backup Handlers
-  const handleExport = () => {
-    storageService.exportBackup(flows);
-  };
-
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onload = async (event) => {
+    reader.onload = (event) => {
       try {
-        const json = JSON.parse(event.target?.result as string);
-        if (storageService.validateImport(json)) {
-          if (window.confirm(`Se encontrarón ${json.length} flujos. ¿Deseas reemplazar tu base de datos actual con esta copia?`)) {
-            await persistData(json);
-            alert('Base de datos restaurada correctamente.');
+        const imported = JSON.parse(event.target?.result as string);
+        if (storageService.validateImport(imported)) {
+          if (window.confirm(`Se importarán ${imported.length} flujos. ¿Fusionar con los actuales?`)) {
+            const merged = [...flows];
+            imported.forEach(imp => { if (!merged.find(f => f.id === imp.id)) merged.push(imp); });
+            persistData(merged);
           }
-        } else {
-          alert('El archivo no tiene el formato correcto.');
         }
-      } catch (err) {
-        console.error(err);
-        alert('Error al leer el archivo.');
-      }
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      } catch (err) { alert("Archivo inválido."); }
     };
     reader.readAsText(file);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileChange} 
-        className="hidden" 
-        accept=".json"
-      />
+      <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".json" />
 
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 h-16">
-        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 h-full">
-          <div className="flex justify-between h-full items-center">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('dashboard')}>
-              <div className="bg-teal-600 p-2 rounded-lg text-white">
-                <Activity size={24} />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-800">Vistalli Flow</h1>
-                <div className="flex items-center gap-1 text-xs text-slate-500 hidden md:flex">
-                    Editor Visual
-                    {SERVER_CONFIG.USE_SERVER ? (
-                        <span className="text-green-600 flex items-center gap-0.5 ml-2 font-bold"><Cloud size={10} /> Online</span>
-                    ) : (
-                        <span className="text-gray-400 flex items-center gap-0.5 ml-2"><CloudOff size={10} /> Local</span>
-                    )}
-                </div>
-              </div>
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 h-16 shadow-sm">
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 h-full flex justify-between items-center">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('dashboard')}>
+            <div className="bg-teal-600 p-2 rounded-lg text-white shadow-md shadow-teal-100"><Activity size={24} /></div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-800 tracking-tight">Vistalli <span className="text-teal-600">Flow</span></h1>
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Workspace</div>
             </div>
-            
-            <div className="flex items-center gap-2 md:gap-4">
-              {view === 'dashboard' ? (
-                <>
-                  <div className="hidden md:flex items-center border-r border-gray-300 pr-4 mr-2 gap-2">
-                    <button 
-                      onClick={handleImportClick}
-                      disabled={isLoading}
-                      className="text-slate-600 hover:text-teal-700 p-2 rounded-md hover:bg-slate-100 flex items-center gap-1 text-xs font-medium disabled:opacity-50"
-                    >
-                      <Upload size={16} /> Restaurar
-                    </button>
-                    <button 
-                      onClick={handleExport}
-                      disabled={isLoading}
-                      className="text-slate-600 hover:text-teal-700 p-2 rounded-md hover:bg-slate-100 flex items-center gap-1 text-xs font-medium disabled:opacity-50"
-                    >
-                      <Download size={16} /> Backup
-                    </button>
-                  </div>
-                  <button
-                    onClick={handleCreateNew}
-                    disabled={isLoading}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50"
-                  >
-                    {isLoading ? '...' : <><PlusCircle className="-ml-1 mr-2 h-5 w-5" /> Nuevo</>}
-                  </button>
-                </>
-              ) : (
-                <button 
-                  onClick={() => setView('dashboard')}
-                  className="text-slate-500 hover:text-teal-600 flex items-center gap-1 text-sm font-medium"
-                >
-                  <LayoutDashboard size={18} />
-                  Dashboard
-                </button>
-              )}
-            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <button onClick={() => storageService.exportBackup(flows)} className="text-slate-500 hover:text-teal-600 flex items-center gap-1.5 text-sm font-semibold transition-colors"><Download size={18} /> Backup</button>
+            <button onClick={() => fileInputRef.current?.click()} className="text-slate-500 hover:text-teal-600 flex items-center gap-1.5 text-sm font-semibold transition-colors"><Upload size={18} /> Importar</button>
+            <div className="h-6 w-px bg-slate-200 mx-2" />
+            {view === 'dashboard' ? (
+              <button onClick={() => setView('builder')} className="inline-flex items-center px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-lg hover:bg-slate-800 transition-all active:scale-95"><PlusCircle className="-ml-1 mr-2 h-5 w-5" /> Abrir Editor</button>
+            ) : (
+              <button onClick={() => setView('dashboard')} className="text-slate-500 hover:text-teal-600 flex items-center gap-1.5 text-sm font-semibold transition-colors"><LayoutDashboard size={18} /> Dashboard</button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Main Content - Full width for Visual Builder */}
-      <main className={`h-[calc(100vh-64px)] ${view === 'dashboard' ? 'max-w-7xl mx-auto px-4 py-8' : 'w-full'}`}>
-        
+      <main className={`${view === 'dashboard' ? 'max-w-7xl mx-auto px-4 py-8' : 'w-full'}`}>
         {view === 'dashboard' && (
           <Dashboard 
             flows={flows} 
-            onEdit={handleEdit} 
+            onEdit={(f) => { setActiveBranch(f.branch); setCurrentFlowId(f.id); setView('builder'); }} 
             onDelete={handleDelete}
-            onDuplicate={handleDuplicate}
-            onView={handleViewResult}
+            onDuplicate={(f) => handleDuplicate(f)}
+            onView={(f) => { setCurrentFlowId(f.id); setView('result'); }}
           />
         )}
         
-        {(view === 'create' || view === 'edit') && currentFlow && (
+        {view === 'builder' && (
           <VisualBuilder 
-            initialData={currentFlow} 
+            allFlows={flows}
+            initialBranch={activeBranch}
+            initialFlowId={currentFlowId}
+            isSavingGlobal={isSaving}
             onSave={handleSaveFlow} 
+            onDeleteFlow={handleDelete}
+            onDuplicateFlow={(f, branch) => {
+              const dup = handleDuplicate(f, branch);
+              setCurrentFlowId(dup.id);
+              if (branch) setActiveBranch(branch);
+            }}
             onCancel={() => setView('dashboard')} 
           />
         )}
 
-        {view === 'result' && currentFlow && (
+        {view === 'result' && currentFlowId && (
           <div className="max-w-7xl mx-auto px-4 py-8">
             <ResultView 
-                flow={currentFlow} 
+                flow={flows.find(f => f.id === currentFlowId)!} 
                 onBack={() => setView('dashboard')}
-                onEdit={() => setView('edit')}
+                onEdit={() => setView('builder')}
             />
           </div>
         )}
