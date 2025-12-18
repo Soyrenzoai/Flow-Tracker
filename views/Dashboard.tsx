@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FlowData, Branch, Category } from '../types';
 import { BRANCHES, CATEGORIES, BRANCH_THEMES } from '../constants';
-import { Edit, Trash2, Copy, Eye, Search } from 'lucide-react';
+import { Edit, Trash2, Copy, Eye, Search, FileText } from 'lucide-react';
 
 interface DashboardProps {
   flows: FlowData[];
@@ -9,9 +9,10 @@ interface DashboardProps {
   onDuplicate: (flow: FlowData) => void;
   onDelete: (id: string) => void;
   onView: (flow: FlowData) => void;
+  isDarkMode: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ flows, onEdit, onDuplicate, onDelete, onView }) => {
+const Dashboard: React.FC<DashboardProps> = ({ flows, onEdit, onDuplicate, onDelete, onView, isDarkMode }) => {
   const [filterBranch, setFilterBranch] = useState<string>('All');
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,19 +20,20 @@ const Dashboard: React.FC<DashboardProps> = ({ flows, onEdit, onDuplicate, onDel
   const filteredFlows = flows.filter(flow => {
     const matchesBranch = filterBranch === 'All' || flow.branch === filterBranch;
     const matchesCategory = filterCategory === 'All' || flow.category === filterCategory;
-    const matchesSearch = flow.author.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (flow.initialResponse || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (flow.author || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (flow.nodes?.[0]?.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (flow.category || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesBranch && matchesCategory && matchesSearch;
   });
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row gap-4 items-end md:items-center justify-between">
-        <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Sucursal</label>
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row gap-6 items-end md:items-center justify-between transition-colors">
+        <div className="flex flex-col md:flex-row gap-6 w-full md:w-auto">
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Sucursal</label>
             <select 
-              className="rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2 border bg-white text-gray-900"
+              className="rounded-xl border-slate-200 dark:border-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm p-3 border bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors"
               value={filterBranch}
               onChange={(e) => setFilterBranch(e.target.value)}
             >
@@ -39,10 +41,10 @@ const Dashboard: React.FC<DashboardProps> = ({ flows, onEdit, onDuplicate, onDel
               {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Categoría</label>
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Categoría</label>
             <select 
-              className="rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm p-2 border bg-white text-gray-900"
+              className="rounded-xl border-slate-200 dark:border-slate-700 shadow-sm focus:border-teal-500 focus:ring-teal-500 text-sm p-3 border bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
             >
@@ -52,75 +54,58 @@ const Dashboard: React.FC<DashboardProps> = ({ flows, onEdit, onDuplicate, onDel
           </div>
         </div>
         
-        <div className="w-full md:w-64 relative">
+        <div className="w-full md:w-80 relative">
           <input 
              type="text"
-             placeholder="Buscar por autor..."
-             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-500"
+             placeholder="Buscar flujos..."
+             className="w-full pl-12 pr-6 py-3.5 border border-slate-200 dark:border-slate-700 rounded-2xl focus:outline-none focus:ring-4 focus:ring-teal-500/20 focus:border-teal-500 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder-slate-400 transition-all"
              value={searchTerm}
              onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+          <Search className="absolute left-4 top-4 text-slate-400" size={20} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredFlows.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border border-dashed border-gray-300">
-            <p className="text-gray-500">No hay flujos registrados con estos filtros.</p>
+          <div className="col-span-full text-center py-20 bg-white dark:bg-slate-900 rounded-[2rem] border-2 border-dashed border-slate-200 dark:border-slate-800">
+            <FileText size={48} className="mx-auto text-slate-200 dark:text-slate-800 mb-4" />
+            <p className="text-slate-400 dark:text-slate-500 font-medium">No hay flujos registrados.</p>
           </div>
         ) : (
           filteredFlows.map(flow => {
             const theme = BRANCH_THEMES[flow.branch] || BRANCH_THEMES['Giorlent Norte'];
             
             return (
-              <div key={flow.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
-                  <div className="flex-1">
-                    <div className="flex gap-2 items-center mb-2">
-                      <span 
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${theme.light} ${theme.text} border ${theme.border}`}
-                      >
-                        {flow.branch}
-                      </span>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                        {flow.category}
-                      </span>
-                    </div>
-                    {/* Visual Preview of nodes summary */}
-                    <div className="mb-2">
-                        {flow.nodes && flow.nodes.length > 0 ? (
-                           <h3 className="text-lg font-medium text-gray-900 truncate">
-                              {flow.nodes.find(n => n.type === 'trigger')?.title || 'Flujo sin Título'}
-                           </h3>
-                        ) : (
-                           <h3 className="text-lg font-medium text-gray-900 truncate mb-1">
-                            {flow.initialResponse || 'Sin respuesta inicial definida'}
-                           </h3>
-                        )}
-                    </div>
-
-                    <p className="text-sm text-gray-500">
-                      Por <span className="font-semibold">{flow.author || 'Anónimo'}</span> el {flow.date}
-                    </p>
-                    <div className="mt-3 flex items-center gap-4 text-sm text-gray-500">
-                      <span>{flow.nodes?.length || flow.steps.length} pasos</span>
-                    </div>
+              <div key={flow.id} className="group bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-lg shadow-slate-100 dark:shadow-none border border-slate-100 dark:border-slate-800 hover:border-teal-500 dark:hover:border-teal-600 transition-all hover:translate-y-[-4px]">
+                <div className="flex flex-col h-full">
+                  <div className="flex gap-2 items-center mb-5">
+                    <span 
+                      className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${theme.light} dark:bg-slate-800 ${theme.text} dark:text-teal-500 border border-transparent dark:border-slate-700`}
+                    >
+                      {flow.branch}
+                    </span>
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      {flow.category.split(' ')[1] || flow.category}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-2 border-t pt-4 md:pt-0 md:border-t-0">
-                    <button onClick={() => onView(flow)} className="p-2 text-gray-400 hover:text-teal-600 rounded-full hover:bg-teal-50" title="Ver Detalles">
-                      <Eye size={20} />
-                    </button>
-                    <button onClick={() => onEdit(flow)} className="p-2 text-gray-400 hover:text-blue-600 rounded-full hover:bg-blue-50" title="Editar">
-                      <Edit size={20} />
-                    </button>
-                    <button onClick={() => onDuplicate(flow)} className="p-2 text-gray-400 hover:text-purple-600 rounded-full hover:bg-purple-50" title="Duplicar">
-                      <Copy size={20} />
-                    </button>
-                    <button onClick={() => onDelete(flow.id)} className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-red-50" title="Eliminar">
-                      <Trash2 size={20} />
-                    </button>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 mb-2 leading-tight min-h-[3.5rem] line-clamp-2">
+                    {flow.nodes?.find(n => n.type === 'trigger')?.title || 'Flujo sin Título'}
+                  </h3>
+
+                  <div className="mt-auto pt-6 flex items-center justify-between border-t border-slate-50 dark:border-slate-800">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Autor</span>
+                      <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{flow.author || 'Vendedor'}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => onView(flow)} className="p-2.5 text-slate-400 hover:text-teal-600 dark:hover:bg-slate-800 rounded-xl transition-all" title="Vista Previa"><Eye size={20} /></button>
+                      <button onClick={() => onEdit(flow)} className="p-2.5 text-slate-400 hover:text-blue-600 dark:hover:bg-slate-800 rounded-xl transition-all" title="Editar"><Edit size={20} /></button>
+                      <button onClick={() => onDuplicate(flow)} className="p-2.5 text-slate-400 hover:text-purple-600 dark:hover:bg-slate-800 rounded-xl transition-all" title="Duplicar"><Copy size={20} /></button>
+                      <button onClick={() => onDelete(flow.id)} className="p-2.5 text-slate-400 hover:text-red-500 dark:hover:bg-slate-800 rounded-xl transition-all" title="Borrar"><Trash2 size={20} /></button>
+                    </div>
                   </div>
                 </div>
               </div>

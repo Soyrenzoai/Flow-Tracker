@@ -8,9 +8,10 @@ interface ResultViewProps {
   flow: FlowData;
   onBack: () => void;
   onEdit: () => void;
+  isDarkMode: boolean;
 }
 
-const ResultView: React.FC<ResultViewProps> = ({ flow, onBack, onEdit }) => {
+const ResultView: React.FC<ResultViewProps> = ({ flow, onBack, onEdit, isDarkMode }) => {
   const [tab, setTab] = useState<'chart' | 'code' | 'json'>('chart');
   const [copied, setCopied] = useState(false);
   
@@ -33,135 +34,103 @@ const ResultView: React.FC<ResultViewProps> = ({ flow, onBack, onEdit }) => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header Actions */}
+    <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Cabecera de Acciones */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-         <button onClick={onBack} className="flex items-center text-gray-500 hover:text-gray-800 transition-colors">
-            <ArrowLeft size={20} className="mr-1" /> Volver al Dashboard
+         <button onClick={onBack} className="flex items-center text-slate-500 dark:text-slate-400 hover:text-teal-600 font-bold text-sm transition-colors group">
+            <ArrowLeft size={20} className="mr-2 group-hover:-translate-x-1 transition-transform" /> Volver al Dashboard
          </button>
          <div className="flex gap-2">
-             <button onClick={onEdit} className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                <Edit size={16} className="mr-2" /> Editar
+             <button onClick={onEdit} className="inline-flex items-center px-6 py-2.5 bg-slate-900 dark:bg-teal-600 text-white text-sm font-bold rounded-xl shadow-lg hover:opacity-90 transition-all">
+                <Edit size={16} className="mr-2" /> Seguir Editando
              </button>
          </div>
       </div>
 
-      {/* Info Card */}
-      <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-          <div className="flex flex-col md:flex-row justify-between mb-4 border-b border-gray-100 pb-4">
-            <div>
-                <h2 className="text-2xl font-bold text-gray-900">{flow.category}</h2>
-                <p className="text-teal-600 font-medium">{flow.branch}</p>
-            </div>
-            <div className="text-right mt-2 md:mt-0">
-                 <p className="text-sm text-gray-500">Autor: {flow.author}</p>
-                 <p className="text-sm text-gray-500">Fecha: {flow.date}</p>
+      {/* Tarjeta de Información General */}
+      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl p-8 md:p-12 border border-slate-100 dark:border-slate-800 transition-colors">
+          <div className="flex flex-col md:flex-row justify-between mb-8 border-b border-slate-100 dark:border-slate-800 pb-8">
+            <div className="max-w-2xl">
+                <span className="text-[10px] font-black text-teal-600 uppercase tracking-widest mb-2 block">{flow.branch}</span>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-slate-100 mb-2 leading-tight">
+                  {flow.category}
+                </h2>
+                <div className="flex items-center gap-4 text-slate-400 dark:text-slate-500 font-medium text-sm">
+                  <span>Autor: {flow.author || 'Vendedor'}</span>
+                  <span>•</span>
+                  <span>Fecha: {new Date(flow.createdAt || Date.now()).toLocaleDateString()}</span>
+                </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div>
-                 <h4 className="text-sm font-bold text-gray-500 uppercase mb-2">Respuesta Inicial</h4>
-                 <div className="p-3 bg-gray-50 rounded text-gray-800 italic border border-gray-200">
-                    "{flow.initialResponse}"
+          {/* Diagrama y Secciones de Datos */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+             <div className="md:col-span-2">
+                 <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Secuencia del Diagrama</h4>
+                    <div className="flex gap-3 text-[10px] font-bold">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Acción</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500"></span> Mensaje</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Decisión</span>
+                    </div>
+                 </div>
+                 <div className="p-2 bg-slate-50 dark:bg-slate-950 rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <Mermaid chart={mermaidChart} />
                  </div>
              </div>
-             <div>
-                 <h4 className="text-sm font-bold text-gray-500 uppercase mb-2">Objetivo</h4>
-                 <div className="p-3 bg-green-50 rounded text-green-900 border border-green-100">
-                    {flow.objective || 'Sin definir'}
+             
+             <div className="space-y-6">
+                 <div>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Exportación</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                        <button 
+                          onClick={() => setTab('chart')}
+                          className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all font-bold text-sm
+                            ${tab === 'chart' ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400' : 'border-slate-100 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}
+                          `}
+                        >
+                          <div className="flex items-center gap-3"><GitMerge size={18} /> Ver Diagrama</div>
+                        </button>
+                        <button 
+                          onClick={() => setTab('code')}
+                          className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all font-bold text-sm
+                            ${tab === 'code' ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400' : 'border-slate-100 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}
+                          `}
+                        >
+                          <div className="flex items-center gap-3"><FileText size={18} /> Código Mermaid</div>
+                        </button>
+                        <button 
+                          onClick={() => setTab('json')}
+                          className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all font-bold text-sm
+                            ${tab === 'json' ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400' : 'border-slate-100 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}
+                          `}
+                        >
+                          <div className="flex items-center gap-3"><Code size={18} /> Estructura JSON</div>
+                        </button>
+                    </div>
+                 </div>
+
+                 <div className="bg-teal-600 p-6 rounded-[2rem] text-white shadow-xl shadow-teal-500/20">
+                    <Download className="mb-4" size={24} />
+                    <h5 className="font-black text-sm uppercase tracking-widest mb-2">Descargar Datos</h5>
+                    <p className="text-[10px] text-teal-100 leading-relaxed mb-6 font-medium">Descarga el archivo estructurado para respaldos o integración con bots.</p>
+                    <button onClick={downloadJSON} className="w-full bg-white text-teal-600 font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-teal-50 transition-colors">Guardar .JSON</button>
                  </div>
              </div>
           </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-          <button
-            onClick={() => setTab('chart')}
-            className={`${
-              tab === 'chart'
-                ? 'border-teal-500 text-teal-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
-          >
-            <GitMerge size={18} className="mr-2" /> Diagrama Visual
-          </button>
-          <button
-            onClick={() => setTab('code')}
-            className={`${
-              tab === 'code'
-                ? 'border-teal-500 text-teal-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
-          >
-            <FileText size={18} className="mr-2" /> Código Mermaid (Texto)
-          </button>
-          <button
-            onClick={() => setTab('json')}
-            className={`${
-              tab === 'json'
-                ? 'border-teal-500 text-teal-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
-          >
-            <Code size={18} className="mr-2" /> JSON Datos
-          </button>
-        </nav>
-      </div>
-
-      {/* Content */}
-      <div className="min-h-[400px]">
-          {tab === 'chart' && (
-              <div className="space-y-4">
-                  <div className="bg-blue-50 p-4 rounded text-sm text-blue-800 flex flex-col md:flex-row gap-4 justify-between">
-                     <p>Este diagrama se genera automáticamente en base a los pasos y condiciones ingresadas.</p>
-                     <div className="flex gap-4 text-xs font-bold">
-                        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-[#bbf] border border-[#333] inline-block"></span> Acción Interna</span>
-                        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-[#aff] border border-[#333] inline-block"></span> Mensaje</span>
-                        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-[#f9f] border border-[#333] transform rotate-45 inline-block scale-75"></span> Pregunta</span>
-                     </div>
-                  </div>
-                  <Mermaid chart={mermaidChart} />
-              </div>
-          )}
-
-          {tab === 'code' && (
-              <div className="relative">
-                  <div className="flex justify-between items-center mb-2">
-                      <p className="text-sm text-gray-500">
-                          Copia este código y pégalo en cualquier editor compatible con Mermaid (Notion, GitHub, Obsidian, etc).
-                      </p>
-                      <button 
-                        onClick={copyToClipboard}
-                        className={`flex items-center px-3 py-1.5 rounded text-sm font-medium transition-colors ${copied ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                      >
-                          {copied ? <Check size={16} className="mr-1.5" /> : <Copy size={16} className="mr-1.5" />}
-                          {copied ? 'Copiado!' : 'Copiar Código'}
-                      </button>
-                  </div>
-                  <textarea 
-                    readOnly
-                    value={mermaidChart}
-                    className="w-full h-[500px] p-4 font-mono text-sm bg-gray-900 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-              </div>
-          )}
-
-          {tab === 'json' && (
-              <div className="relative">
-                 <div className="flex justify-end mb-2">
-                    <button onClick={downloadJSON} className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded text-white bg-teal-600 hover:bg-teal-700">
-                        <Download size={16} className="mr-2" /> Descargar Archivo .json
-                    </button>
-                 </div>
-                 <div className="bg-gray-900 rounded-lg p-6 overflow-auto max-h-[600px] shadow-inner">
-                    <pre className="text-green-400 font-mono text-sm">
-                        {JSON.stringify(flow, null, 2)}
-                    </pre>
-                 </div>
-              </div>
+          
+          {tab !== 'chart' && (
+            <div className="mt-12 p-8 bg-slate-900 dark:bg-slate-950 rounded-[2rem] border border-slate-800 animate-in slide-in-from-top-4 duration-300 relative">
+               <button 
+                  onClick={copyToClipboard}
+                  className="absolute top-6 right-6 flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all border border-slate-700"
+               >
+                 {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado' : 'Copiar'}
+               </button>
+               <pre className="text-teal-400 font-mono text-xs overflow-x-auto custom-scrollbar leading-loose pt-4">
+                 {tab === 'code' ? mermaidChart : JSON.stringify(flow, null, 2)}
+               </pre>
+            </div>
           )}
       </div>
     </div>

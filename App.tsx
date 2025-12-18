@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Activity, PlusCircle, LayoutDashboard, Download, Upload } from 'lucide-react';
+import { Activity, PlusCircle, LayoutDashboard, Download, Upload, Moon, Sun } from 'lucide-react';
 import { FlowData, Branch } from './types';
 import { INITIAL_FLOW_STATE } from './constants';
 import { storageService } from './utils/storage';
@@ -19,6 +19,15 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('theme');
+      if (saved) return saved === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
   useEffect(() => {
     const loadData = async () => {
       if (SERVER_CONFIG.USE_SERVER) {
@@ -32,19 +41,27 @@ export default function App() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
   const persistData = useCallback(async (newFlows: FlowData[]) => {
     setIsSaving(true);
-    setFlows([...newFlows]); // Force new reference
     if (SERVER_CONFIG.USE_SERVER) {
       await apiService.saveAllFlows(newFlows);
     } else {
       storageService.saveFlows(newFlows);
     }
-    // Artificial delay for UX feedback
     setTimeout(() => setIsSaving(false), 800);
   }, []);
 
-  const handleSaveFlow = useCallback(async (updatedFlow: FlowData) => {
+  const handleSaveFlow = useCallback((updatedFlow: FlowData) => {
     setFlows(prev => {
       const existingIndex = prev.findIndex(f => f.id === updatedFlow.id);
       let nextFlows;
@@ -59,13 +76,16 @@ export default function App() {
     });
   }, [persistData]);
 
-  const handleDelete = useCallback(async (id: string) => {
+  const handleDelete = useCallback((id: string) => {
     if (window.confirm('¿Estás seguro de eliminar este flujo?')) {
-      const updatedFlows = flows.filter(f => f.id !== id);
-      persistData(updatedFlows);
+      setFlows(prev => {
+        const next = prev.filter(f => f.id !== id);
+        persistData(next);
+        return next;
+      });
       if (currentFlowId === id) setCurrentFlowId(null);
     }
-  }, [flows, currentFlowId, persistData]);
+  }, [currentFlowId, persistData]);
 
   const handleDuplicate = useCallback((flow: FlowData, targetBranch?: Branch) => {
     const duplicated: FlowData = {
@@ -76,10 +96,13 @@ export default function App() {
       date: new Date().toISOString().split('T')[0],
       category: flow.category + (targetBranch ? '' : ' (Copia)'),
     };
-    const nextFlows = [...flows, duplicated];
-    persistData(nextFlows);
+    setFlows(prev => {
+      const next = [...prev, duplicated];
+      persistData(next);
+      return next;
+    });
     return duplicated;
-  }, [flows, persistData]);
+  }, [persistData]);
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -89,10 +112,15 @@ export default function App() {
       try {
         const imported = JSON.parse(event.target?.result as string);
         if (storageService.validateImport(imported)) {
-          if (window.confirm(`Se importarán ${imported.length} flujos. ¿Fusionar con los actuales?`)) {
-            const merged = [...flows];
-            imported.forEach(imp => { if (!merged.find(f => f.id === imp.id)) merged.push(imp); });
-            persistData(merged);
+          if (window.confirm(`Se importarán ${imported.length} flujos. ¿Fusionar?`)) {
+            setFlows(prev => {
+              const merged = [...prev];
+              imported.forEach((imp: FlowData) => { 
+                if (!merged.find(f => f.id === imp.id)) merged.push(imp); 
+              });
+              persistData(merged);
+              return merged;
+            });
           }
         }
       } catch (err) { alert("Archivo inválido."); }
@@ -101,27 +129,35 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+    <div className="min-h-screen transition-colors duration-300 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
       <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".json" />
 
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 h-16 shadow-sm">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 h-16 shadow-sm transition-colors">
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 h-full flex justify-between items-center">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('dashboard')}>
-            <div className="bg-teal-600 p-2 rounded-lg text-white shadow-md shadow-teal-100"><Activity size={24} /></div>
+            <div className="bg-teal-600 p-2 rounded-lg text-white shadow-md shadow-teal-100 dark:shadow-none"><Activity size={24} /></div>
             <div>
-              <h1 className="text-xl font-bold text-slate-800 tracking-tight">Vistalli <span className="text-teal-600">Flow</span></h1>
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Workspace</div>
+              <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Vistalli <span className="text-teal-600">Flow</span></h1>
+              <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Workspace</div>
             </div>
           </div>
           
           <div className="flex items-center gap-4">
-            <button onClick={() => storageService.exportBackup(flows)} className="text-slate-500 hover:text-teal-600 flex items-center gap-1.5 text-sm font-semibold transition-colors"><Download size={18} /> Backup</button>
-            <button onClick={() => fileInputRef.current?.click()} className="text-slate-500 hover:text-teal-600 flex items-center gap-1.5 text-sm font-semibold transition-colors"><Upload size={18} /> Importar</button>
-            <div className="h-6 w-px bg-slate-200 mx-2" />
+            <button 
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="p-2 text-slate-500 hover:text-teal-600 dark:text-slate-400 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Alternar modo oscuro"
+            >
+              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
+            <button onClick={() => storageService.exportBackup(flows)} className="hidden md:flex text-slate-500 hover:text-teal-600 dark:text-slate-400 items-center gap-1.5 text-sm font-semibold transition-colors"><Download size={18} /> Backup</button>
+            <button onClick={() => fileInputRef.current?.click()} className="hidden md:flex text-slate-500 hover:text-teal-600 dark:text-slate-400 items-center gap-1.5 text-sm font-semibold transition-colors"><Upload size={18} /> Importar</button>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
             {view === 'dashboard' ? (
-              <button onClick={() => setView('builder')} className="inline-flex items-center px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-lg hover:bg-slate-800 transition-all active:scale-95"><PlusCircle className="-ml-1 mr-2 h-5 w-5" /> Abrir Editor</button>
+              <button onClick={() => setView('builder')} className="inline-flex items-center px-4 py-2 bg-slate-900 dark:bg-teal-600 text-white text-sm font-bold rounded-xl shadow-lg hover:bg-slate-800 dark:hover:bg-teal-700 transition-all active:scale-95"><PlusCircle className="-ml-1 mr-2 h-5 w-5" /> Abrir Editor</button>
             ) : (
-              <button onClick={() => setView('dashboard')} className="text-slate-500 hover:text-teal-600 flex items-center gap-1.5 text-sm font-semibold transition-colors"><LayoutDashboard size={18} /> Dashboard</button>
+              <button onClick={() => setView('dashboard')} className="text-slate-500 hover:text-teal-600 dark:text-slate-400 flex items-center gap-1.5 text-sm font-semibold transition-colors"><LayoutDashboard size={18} /> Dashboard</button>
             )}
           </div>
         </div>
@@ -135,6 +171,7 @@ export default function App() {
             onDelete={handleDelete}
             onDuplicate={(f) => handleDuplicate(f)}
             onView={(f) => { setCurrentFlowId(f.id); setView('result'); }}
+            isDarkMode={isDarkMode}
           />
         )}
         
@@ -152,6 +189,7 @@ export default function App() {
               if (branch) setActiveBranch(branch);
             }}
             onCancel={() => setView('dashboard')} 
+            isDarkMode={isDarkMode}
           />
         )}
 
@@ -161,6 +199,7 @@ export default function App() {
                 flow={flows.find(f => f.id === currentFlowId)!} 
                 onBack={() => setView('dashboard')}
                 onEdit={() => setView('builder')}
+                isDarkMode={isDarkMode}
             />
           </div>
         )}
